@@ -1,0 +1,83 @@
+﻿syntax = "proto3";
+
+option csharp_namespace = "ChatService.Chat";
+
+package service.chat;
+
+service ChattingService {
+	// 这个方法暂时是残的，只能定向返回C2C的聊天数据，日后会丰富它的查询条件
+	rpc syncChatRecord (SyncChatRecordRequest) returns (SyncChatRecordReply);
+	
+	// 无需成为好友都可以发送
+	rpc sendAnyC2CMessage (C2CChatMessage) returns (SendReply);
+
+	// 以stream的方式订阅消息推送流，日后还会推出基于ws的推送以适配更多的设备
+	rpc subscribeChatMessage (SubscribeChannelRequest) returns (stream ChatMessageWrapper);
+}
+
+message SyncChatRecordRequest {
+	string userUid = 1;
+	string fromTime = 2;
+	string toTime = 3;
+
+	// 4, 5还没有实现，给了也没用，目前会截断100条数据
+	uint32 maxLength = 4;
+	uint32 page = 5;
+}
+
+message SyncChatRecordReply {
+	repeated ChatMessageWrapper records = 1;
+}
+
+message C2CChatMessage {
+	string senderUserUid = 1;
+	// 这个是用于区别一个用户多个设备的情况。
+	// 同一个设备，在每次使用的时候，deviceTag最好要保持一致（不一致也没有关系，只会让你的日志难查而已）
+	// 如果同一个用户，有多个设备，应该给不同设备赋予不同的deviceTag，
+	// 否则有可能会出现未定义行为（具体可能要看集群的路由情况，可能会出现非常诡异的行为）
+	string senderDeviceTag = 2;
+	string receiverUserUid = 3;
+
+	// 当发送消息时，4, 5, 6字段不填，主要是为了复用
+	// 6还没实现
+	string messageUid = 4;
+	string messageSendTime = 5;
+	DeliveryState deliveryState = 6;
+	
+	// 框架会将聊天消息一视同仁为二进制，客户端自行处理解码与编码的问题
+	// 不要太大，会带来很多性能问题
+	// 如果需要发送图片、视频、音频、文件等等，请先上传至OSS，再将链接进行发送，请勿直接发二进制文件
+	bytes content = 7;
+
+	// 当这条消息被成功发出的时候，我们的服务器会向这个地址发送一条请求用于通知
+	// 客户的服务器接到该请求之后，可以向手机厂商申请第三方推送，因为框架无法触及物理设备的推送通知
+	// 也可以对消息内容进行留底
+	string notificationUrl = 8;
+}
+
+enum DeliveryState {
+	Sent = 0;
+	Delivered = 1;
+	Ack = 2;
+}
+
+message SendReply {
+	bool success = 1;
+	uint32 errorCode = 2;
+	string errorTip = 3;
+	// 消息也会有一个Uid，全局唯一，B端客户可用作留底凭证
+	string messageUid = 4;
+}
+
+message ChatMessageWrapper {
+	// 以后要补充例如好友申请、服务器下发消息等等
+	oneof content {
+		C2CChatMessage c2cMessage = 1;
+	}
+}
+
+message SubscribeChannelRequest {
+	string userUid = 1;
+	// 具体看C2CChatMessage中约定的2
+	string deviceTag = 2;
+}

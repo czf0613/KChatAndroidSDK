@@ -1,0 +1,44 @@
+﻿syntax = "proto3";
+
+option csharp_namespace = "ChatService.User";
+
+package service.user;
+
+service UserService {
+	rpc createApp(CreateAppRequest) returns (CreateAppReply);
+	
+	// 使用之前先注册用户，才能开始发送消息。
+	// 如果这个用户对应的Tag值已经存在，就返回这个用户的信息，否则，创建一个对应的新用户
+	// 虽然不是必须，我们仍建议B端客户自行保存用户的Uid，而不是每次都向我们进行查询
+	rpc createAppUser(CreateUserRequest) returns (CreateUserReply);
+
+	// 未实现好友、建群等等功能
+}
+
+message CreateAppRequest {
+	string appName = 1;
+}
+
+message CreateAppReply {
+	string appName = 1;
+	string appId = 2;
+	string appKey = 3;
+}
+
+message CreateUserRequest {
+	// 用于B端客户标识自己用户的唯一Key
+	string userTag = 1;
+}
+
+message CreateUserReply {
+	string userUid = 1;
+	string userTag = 2;
+
+	// 暂未投入使用
+	UserState userState = 3;
+}
+
+enum UserState {
+	Normal = 0;
+	Ban = 1;
+}
