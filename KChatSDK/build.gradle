@@ -1,13 +1,7 @@
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
-    id 'com.squareup.wire'
-}
-
-wire {
-    kotlin {
-        android = true
-    }
+    id 'com.google.protobuf'
 }
 
 android {
@@ -37,13 +31,51 @@ android {
 }
 
 dependencies {
-
-//    implementation 'androidx.core:core-ktx:1.9.0'
-//    implementation 'androidx.appcompat:appcompat:1.5.1'
-//    implementation 'com.google.android.material:material:1.6.1'
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.3'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
 
-    implementation "com.squareup.wire:wire-grpc-client:$wire_version"
+    implementation("io.grpc:grpc-okhttp:$grpc_version")
+    implementation("io.grpc:grpc-stub:$grpc_version")
+    implementation("io.grpc:grpc-protobuf-lite:$grpc_version")
+    implementation("io.grpc:grpc-kotlin-stub:$grpcKt_version")
+    implementation("com.google.protobuf:protobuf-kotlin-lite:$protobufKt_version")
+    implementation('org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4')
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:$protobufKt_version"
+    }
+    plugins {
+        java {
+            artifact = "io.grpc:protoc-gen-grpc-java:$grpc_version"
+        }
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:$grpc_version"
+        }
+        grpcKt {
+            artifact = "io.grpc:protoc-gen-grpc-kotlin:$grpcKt_version:jdk8@jar"
+        }
+    }
+    generateProtoTasks {
+        all().forEach {
+            it.plugins {
+                java {
+                    option("lite")
+                }
+                grpc {
+                    option("lite")
+                }
+                grpcKt {
+                    option("lite")
+                }
+            }
+            it.builtins {
+                kotlin {
+                    option("lite")
+                }
+            }
+        }
+    }
 }

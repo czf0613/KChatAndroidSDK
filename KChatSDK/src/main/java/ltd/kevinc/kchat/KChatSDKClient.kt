@@ -1,48 +1,50 @@
 package ltd.kevinc.kchat
 
-import android.provider.Settings
 import android.util.Log
-import com.squareup.wire.GrpcClient
-import okhttp3.OkHttpClient
-import service.chat.GrpcChattingServiceClient
-import service.user.CreateUserRequest
-import service.user.GrpcUserServiceClient
-import java.net.Proxy
-import java.util.concurrent.TimeUnit
+import io.grpc.Metadata
+import io.grpc.okhttp.OkHttpChannelBuilder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
+import service.chat.ChattingServiceGrpcKt
+import service.user.User
+import service.user.UserServiceGrpcKt
 
 object KChatSDKClient {
     private lateinit var mAppId: String
     private lateinit var mAppKey: String
     internal lateinit var mUserUid: String
-    internal const val deviceId = Settings.Secure.ANDROID_ID
+    internal lateinit var mdeviceId: String
+    internal lateinit var header: Metadata
 
     private val channel by lazy {
-        GrpcClient.Builder()
-            .baseUrl("https://chat.kevinc.ltd:8081")
-            .client(
-                OkHttpClient.Builder()
-                    .connectTimeout(10, TimeUnit.SECONDS)
-                    .callTimeout(10, TimeUnit.SECONDS)
-                    .readTimeout(15, TimeUnit.SECONDS)
-                    .writeTimeout(10, TimeUnit.SECONDS)
-                    .retryOnConnectionFailure(true)
-                    .proxy(Proxy.NO_PROXY)
-                    .build()
-            )
+        OkHttpChannelBuilder.forAddress("chat.kevinc.ltd", 8081)
+            .useTransportSecurity()
+            .enableRetry()
+            .executor(Dispatchers.IO.asExecutor())
             .build()
     }
 
-    private val userClient = GrpcUserServiceClient(channel)
-    internal val chatClient = GrpcChattingServiceClient(channel)
-
-    fun registerApp(appId: String, appKey: String) {
-        this.mAppId = appId
-        this.mAppKey = appKey
+    private val userClient by lazy {
+        UserServiceGrpcKt.UserServiceCoroutineStub(channel)
+    }
+    internal val chatClient by lazy {
+        ChattingServiceGrpcKt.ChattingServiceCoroutineStub(channel)
     }
 
-    internal fun makeHeader(): Map<String, String> = HashMap<String, String>().apply {
-        put("X-AppId", mAppId)
-        put("X-AppKey", mAppKey)
+    /**
+     * 在开始使用前，需要注册App到环境中
+     * @param deviceId 设备标识符，每个用户内保证唯一即可。
+     * 只需保证在一个用户底下不发生重复即可，为保证隐私安全，我们强烈不建议使用硬件地址等等的信息
+     * 一般来讲，为了能过审核，我们推荐使用安卓内置的SSAID，或者一个自行储存的UUID
+     */
+    fun registerApp(appId: String, appKey: String, deviceId: String) {
+        this.mAppId = appId
+        this.mAppKey = appKey
+        this.mdeviceId = deviceId
+
+        this.header = Metadata()
+        header.put(Metadata.Key.of("X-AppId", Metadata.ASCII_STRING_MARSHALLER), mAppId)
+        header.put(Metadata.Key.of("X-AppKey", Metadata.ASCII_STRING_MARSHALLER), mAppKey)
     }
 
     /**
@@ -52,12 +54,13 @@ object KChatSDKClient {
      * @return 返回ChatSDK中的用户Guid，用于进行后续操作
      */
     suspend fun getOrCreateUser(userTag: String): String {
-        val request = CreateUserRequest(userTag = userTag)
+        val request = User.CreateUserRequest.newBuilder()
+            .setUserTag(userTag)
+            .build()
 
         return try {
-            mUserUid = userClient.createAppUser().apply {
-                requestMetadata = makeHeader()
-            }.execute(request).userUid
+            mUserUid = userClient.createAppUser(request, header)
+                .userUid
 
             mUserUid
         } catch (e: Exception) {

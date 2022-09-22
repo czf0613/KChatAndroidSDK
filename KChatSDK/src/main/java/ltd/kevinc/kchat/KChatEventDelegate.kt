@@ -1,13 +1,17 @@
 package ltd.kevinc.kchat
 
-import service.chat.C2CChatMessage
+import service.chat.Chat
 
 interface KChatEventDelegate {
-    fun onReceiveC2CMessage(message: C2CChatMessage) {
+    fun onReceiveC2CMessage(message: Chat.C2CChatMessage) {
 
     }
 
-    fun channelClose(e: Exception) {
+    fun onError(e: Throwable) {
+
+    }
+
+    fun channelClose(e: Throwable?) {
 
     }
 }

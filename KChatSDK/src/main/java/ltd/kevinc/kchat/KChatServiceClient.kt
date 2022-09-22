@@ -1,13 +1,12 @@
 package ltd.kevinc.kchat
 
 import android.util.Log
-import kotlinx.coroutines.CoroutineScope
-import okio.ByteString
-import service.chat.C2CChatMessage
-import service.chat.ChatMessageWrapper
-import service.chat.SubscribeChannelRequest
-import service.chat.SyncChatRecordRequest
+import com.google.protobuf.ByteString
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.onCompletion
+import service.chat.Chat
 
+@Suppress("BlockingMethodInNonBlockingContext")
 class KChatServiceClient {
     /**
      * 在app启动时，可以用这个接口进行数据的同步
@@ -18,17 +17,15 @@ class KChatServiceClient {
     suspend fun fetChatRecords(
         startTime: String = "2022-01-01T00:00:00.000+08:00",
         endTime: String = "2099-12-31T23:59:59.999+08:00"
-    ): List<ChatMessageWrapper> {
-        val request = SyncChatRecordRequest(
-            userUid = KChatSDKClient.mUserUid,
-            fromTime = startTime,
-            toTime = endTime
-        )
+    ): List<Chat.ChatMessageWrapper> {
+        val request = Chat.SyncChatRecordRequest.newBuilder()
+            .setUserUid(KChatSDKClient.mUserUid)
+            .setFromTime(startTime)
+            .setToTime(endTime)
+            .build()
 
         return try {
-            KChatSDKClient.chatClient.syncChatRecord().apply {
-                requestMetadata = KChatSDKClient.makeHeader()
-            }.execute(request).records
+            KChatSDKClient.chatClient.syncChatRecord(request, KChatSDKClient.header).recordsList
         } catch (e: Exception) {
             Log.e("KChat.SyncRecord", "failed to fetch data")
             e.printStackTrace()
@@ -45,50 +42,56 @@ class KChatServiceClient {
      * @return 返回消息的Guid，此记录唯一，前端可进行缓存
      */
     suspend fun sendAnyC2CMessage(
-        content: ByteString,
+        content: ByteArray,
         receiver: String,
         notificationUrl: String = ""
     ): String {
-        val request = C2CChatMessage(
-            senderUserUid = KChatSDKClient.mUserUid,
-            senderDeviceTag = KChatSDKClient.deviceId,
-            receiverUserUid = receiver,
-            content = content,
-            notificationUrl = notificationUrl
-        )
+        val request = Chat.C2CChatMessage.newBuilder()
+            .setSenderUserUid(KChatSDKClient.mUserUid)
+            .setSenderDeviceTag(KChatSDKClient.mdeviceId)
+            .setReceiverUserUid(receiver)
+            .setNotificationUrl(notificationUrl)
+            .setContent(ByteString.copyFrom(content))
+            .build()
+
 
         return try {
-            KChatSDKClient.chatClient.sendAnyC2CMessage().apply {
-                requestMetadata = KChatSDKClient.makeHeader()
-            }.execute(request).messageUid
+            KChatSDKClient.chatClient.sendAnyC2CMessage(request, KChatSDKClient.header).messageUid
         } catch (e: Exception) {
             Log.e("KChat.SendAnyC2C", "send message failed!")
             throw e
         }
     }
 
-    suspend fun listenForChatMessage(listener: KChatEventDelegate, coroutineScope: CoroutineScope) {
-        val request = SubscribeChannelRequest(
-            userUid = KChatSDKClient.mUserUid,
-            deviceTag = KChatSDKClient.deviceId
-        )
+    suspend fun listenForChatMessage(listener: KChatEventDelegate) {
+        val request = Chat.SubscribeChannelRequest.newBuilder()
+            .setUserUid(KChatSDKClient.mUserUid)
+            .setDeviceTag(KChatSDKClient.mdeviceId)
+            .build()
 
-        KChatSDKClient.chatClient.subscribeChatMessage().apply {
-            this.requestMetadata = KChatSDKClient.makeHeader()
-        }.executeIn(coroutineScope)
-            .let { (sendChannel, receiveChannel) ->
-                try {
-                    sendChannel.send(request)
-
-                    for (update in receiveChannel) {
-                        update.c2cMessage?.let {
-                            listener.onReceiveC2CMessage(it)
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("KChat.Subscribe", "fail to establish a chat channel")
-                    listener.channelClose(e)
+        try {
+            KChatSDKClient.chatClient
+                .subscribeChatMessage(request, KChatSDKClient.header)
+                .catch { err ->
+                    listener.onError(err)
+                    Log.e("KChat.Subscribe", "network err!")
                 }
-            }
+                .onCompletion { err ->
+                    listener.channelClose(err)
+                    Log.e("KChat.Subscribe", "channel closed due to some reason.")
+                }
+                .collect { message ->
+                    when (message.contentCase) {
+                        Chat.ChatMessageWrapper.ContentCase.C2CMESSAGE -> listener.onReceiveC2CMessage(
+                            message.c2CMessage
+                        )
+                        else -> listener.onError(IllegalArgumentException("unknown message type"))
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e("KChat.Subscribe", "fail to establish a chat channel")
+            listener.channelClose(e)
+            e.printStackTrace()
+        }
     }
 }
