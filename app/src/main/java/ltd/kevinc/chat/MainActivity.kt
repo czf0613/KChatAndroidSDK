@@ -66,6 +66,10 @@ class MainActivity : AppCompatActivity() {
                 override fun channelClose(e: Throwable?) {
                     println("channel被关闭")
                 }
+
+                override fun onError(e: Throwable) {
+                    e.printStackTrace()
+                }
             })
         }
     }
