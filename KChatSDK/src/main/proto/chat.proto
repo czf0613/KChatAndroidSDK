@@ -53,6 +53,13 @@ message C2CChatMessage {
 	// 客户的服务器接到该请求之后，可以向手机厂商申请第三方推送，因为框架无法触及物理设备的推送通知
 	// 也可以对消息内容进行留底
 	string notificationUrl = 8;
+
+	// 补丁1，因为有一些客户的原因，并没有把userTag和userId保存进去自己的系统，就会导致一些不方便
+	// （没错，说的就是我们自己
+	// 所以这里把客户的userTag也返回来了，让客户不再需要改造自己的系统就可以接入
+	// 同样的道理，发送消息时，这两个值不需要手动填，服务端会自动处理
+	string senderUserTag = 9;
+	string receiverUserTag = 10;
 }
 
 enum DeliveryState {

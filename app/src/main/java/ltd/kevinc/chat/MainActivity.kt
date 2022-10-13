@@ -11,10 +11,8 @@ import androidx.navigation.ui.setupActionBarWithNavController
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.launch
 import ltd.kevinc.chat.databinding.ActivityMainBinding
-import ltd.kevinc.kchat.KChatEventDelegate
 import ltd.kevinc.kchat.KChatSDKClient
 import ltd.kevinc.kchat.KChatServiceClient
-import service.chat.Chat
 
 class MainActivity : AppCompatActivity() {
     private lateinit var userGuid: String
@@ -56,21 +54,25 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             userGuid = KChatSDKClient.getOrCreateUser("114514")
-            val client = KChatServiceClient()
+//            val client = KChatServiceClient()
 
-            client.listenForChatMessage(object : KChatEventDelegate {
-                override fun onReceiveC2CMessage(message: Chat.C2CChatMessage) {
-                    println(message.content.toByteArray().decodeToString())
-                }
+//            client.listenForChatMessage(object : KChatEventDelegate {
+//                override fun onReceiveC2CMessage(message: Chat.C2CChatMessage) {
+//                    println(message.content.toByteArray().decodeToString())
+//                }
+//
+//                override fun channelClose(e: Throwable?) {
+//                    println("channel被关闭")
+//                }
+//
+//                override fun onError(e: Throwable) {
+//                    e.printStackTrace()
+//                }
+//            })
 
-                override fun channelClose(e: Throwable?) {
-                    println("channel被关闭")
-                }
-
-                override fun onError(e: Throwable) {
-                    e.printStackTrace()
-                }
-            })
+            KChatServiceClient.fetChatRecords().forEach {
+                println("${it.c2CMessage.senderUserTag}__${it.c2CMessage.receiverUserTag}")
+            }
         }
     }
 }
