@@ -17,7 +17,7 @@ object KChatSDKClient {
     internal lateinit var header: Metadata
 
     private val channel by lazy {
-        OkHttpChannelBuilder.forAddress("chat.kevinc.ltd", 8081)
+        OkHttpChannelBuilder.forAddress("chat.kevinc.ltd", 10000)
             .useTransportSecurity()
             .enableRetry()
             .executor(Dispatchers.IO.asExecutor())
