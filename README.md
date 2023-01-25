@@ -6,5 +6,5 @@ KChat Android SDK
 
 ```groovy
 implementation 'io.grpc:grpc-protobuf-lite:1.49.1'
-implementation 'com.github.czf0613:KChatAndroidSDK:0.0.4'
+implementation 'com.github.czf0613:KChatAndroidSDK:0.0.6'
 ```

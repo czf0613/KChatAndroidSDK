@@ -55,7 +55,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         lifecycleScope.launch {
-            userGuid = KChatSDKClient.getOrCreateUser("114514")
+            userGuid = KChatSDKClient.getOrCreateUser("114514", save = true)
             val client = KChatServiceClient()
 
             client.listenForChatMessage(object : KChatEventDelegate {

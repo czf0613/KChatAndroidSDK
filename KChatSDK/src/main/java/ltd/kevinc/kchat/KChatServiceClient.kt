@@ -26,7 +26,7 @@ class KChatServiceClient {
             endTime: String = "2099-12-31T23:59:59.999+08:00"
         ): List<Chat.ChatMessageWrapper> {
             val request = Chat.SyncChatRecordRequest.newBuilder()
-                .setUserUid(KChatSDKClient.mUserUid)
+                .setUserUid(KChatSDKClient.userUid)
                 .setFromTime(startTime)
                 .setToTime(endTime)
                 .build()
@@ -54,8 +54,8 @@ class KChatServiceClient {
             notificationUrl: String = ""
         ): String {
             val request = Chat.C2CChatMessage.newBuilder()
-                .setSenderUserUid(KChatSDKClient.mUserUid)
-                .setSenderDeviceTag(KChatSDKClient.mdeviceId)
+                .setSenderUserUid(KChatSDKClient.userUid)
+                .setSenderDeviceTag(KChatSDKClient.deviceId)
                 .setReceiverUserUid(receiver)
                 .setNotificationUrl(notificationUrl)
                 .setContent(ByteString.copyFrom(content))
@@ -77,12 +77,17 @@ class KChatServiceClient {
     private lateinit var listener: KChatEventDelegate
     private lateinit var chatChannel: Flow<Chat.ChatMessageWrapper>
 
+    /**
+     * 这个方法需要传入一个delegate用于接收新消息的回调
+     * 由于协程的特性，这个delegate被执行的地方是未知的，因此如果需要在回调中刷新UI
+     * 请务必手动切换线程以避免非主线程刷新UI的bug
+     */
     suspend fun listenForChatMessage(listener: KChatEventDelegate) {
         this.listener = listener
 
         val request = Chat.SubscribeChannelRequest.newBuilder()
-            .setUserUid(KChatSDKClient.mUserUid)
-            .setDeviceTag(KChatSDKClient.mdeviceId)
+            .setUserUid(KChatSDKClient.userUid)
+            .setDeviceTag(KChatSDKClient.deviceId)
             .build()
 
         try {
