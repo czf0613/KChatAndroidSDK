@@ -2,10 +2,8 @@ package ltd.kevinc.kchat
 
 import android.util.Log
 import com.google.protobuf.ByteString
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.*
 import service.chat.Chat
 
 /**
@@ -99,6 +97,7 @@ class KChatServiceClient {
         }
 
         this.chatChannel
+            .flowOn(Dispatchers.IO)
             .onStart {
                 Log.i("KChat.Subscribe", "start listening for message.")
             }
