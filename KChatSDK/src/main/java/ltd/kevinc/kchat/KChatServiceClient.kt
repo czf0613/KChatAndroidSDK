@@ -139,7 +139,8 @@ class KChatServiceClient {
             .setMaxLength(pageSize)
             .build()
 
-        this.syncChannel = KChatSDKClient.chatClient.syncChatRecordStream(request)
+        this.syncChannel =
+            KChatSDKClient.chatClient.syncChatRecordStream(request, KChatSDKClient.header)
 
         this.syncChannel.flowOn(Dispatchers.IO)
             .onStart {
@@ -151,7 +152,7 @@ class KChatServiceClient {
             }
             .onCompletion { err ->
                 err?.printStackTrace()
-                Log.e("KChat.Sync", "sync closed due to some reason.")
+                Log.i("KChat.Sync", "sync finished.")
             }
             .collect { message ->
                 Log.i("KChat.Sync", "pack size: ${message.recordsList.size}")

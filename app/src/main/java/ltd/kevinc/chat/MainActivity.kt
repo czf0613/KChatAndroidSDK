@@ -14,6 +14,7 @@ import ltd.kevinc.chat.databinding.ActivityMainBinding
 import ltd.kevinc.kchat.KChatEventDelegate
 import ltd.kevinc.kchat.KChatSDKClient
 import ltd.kevinc.kchat.KChatServiceClient
+import ltd.kevinc.kchat.KChatSyncRecordStreamDelegate
 import service.chat.Chat
 
 class MainActivity : AppCompatActivity() {
@@ -58,24 +59,28 @@ class MainActivity : AppCompatActivity() {
             userGuid = KChatSDKClient.getOrCreateUser("114514", save = true)
             val client = KChatServiceClient()
 
-            client.listenForChatMessage(object : KChatEventDelegate {
-                override suspend fun onReceiveC2CMessage(message: Chat.C2CChatMessage) {
-                    val body = message.content.toStringUtf8()
-                    println("receiving: $body")
-                }
+//            client.listenForChatMessage(object : KChatEventDelegate {
+//                override suspend fun onReceiveC2CMessage(message: Chat.C2CChatMessage) {
+//                    val body = message.content.toStringUtf8()
+//                    println("receiving: $body")
+//                }
+//
+//                override suspend fun channelClose(e: Throwable?) {
+//                    println("channel被关闭")
+//                }
+//
+//                override suspend fun onError(e: Throwable) {
+//                    e.printStackTrace()
+//                }
+//            })
 
-                override suspend fun channelClose(e: Throwable?) {
-                    println("channel被关闭")
-                }
-
-                override suspend fun onError(e: Throwable) {
-                    e.printStackTrace()
+            client.fetchChatRecords(delegate = object : KChatSyncRecordStreamDelegate {
+                override suspend fun processPack(pack: List<Chat.ChatMessageWrapper>) {
+                    for (i in pack) {
+                        println("${i.c2CMessage.senderUserTag}__${i.c2CMessage.receiverUserTag}")
+                    }
                 }
             })
-
-//            KChatServiceClient.fetChatRecords().forEach {
-//                println("${it.c2CMessage.senderUserTag}__${it.c2CMessage.receiverUserTag}")
-//            }
         }
     }
 }
