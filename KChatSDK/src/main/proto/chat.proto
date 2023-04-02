@@ -5,8 +5,11 @@ option csharp_namespace = "ChatService.Chat";
 package service.chat;
 
 service ChattingService {
-	// 这个方法暂时是残的，只能定向返回C2C的聊天数据，日后会丰富它的查询条件
+	// 这个方法日后会丰富它的查询条件
 	rpc syncChatRecord (SyncChatRecordRequest) returns (SyncChatRecordReply);
+
+	// 跟syncChatRecord返回是类似的，只不过会将分页数据通过stream全量传输，以简化客户端实现
+	rpc syncChatRecordStream (SyncChatRecordRequest) returns (stream SyncChatRecordReply);
 	
 	// 无需成为好友都可以发送
 	rpc sendAnyC2CMessage (C2CChatMessage) returns (SendReply);
@@ -20,13 +23,23 @@ message SyncChatRecordRequest {
 	string fromTime = 2;
 	string toTime = 3;
 
-	// 4, 5还没有实现，给了也没用，目前会截断100条数据
+	// 用于实现分页查询，可以按需返回数据页，同时也可以按照订阅stream返回
 	uint32 maxLength = 4;
+
+	// page字段基数是0，从零开始数
 	uint32 page = 5;
 }
 
 message SyncChatRecordReply {
 	repeated ChatMessageWrapper records = 1;
+	// 基数是0，从零开始数
+	uint32 currentPage = 2;
+	// pageSize实际上就是请求里面那个maxLength字段，它未必等于这个数据的长度
+	uint32 pageSize = 3;
+	uint32 totalPages = 4;
+}
+
+message HeartBeatPack {
 }
 
 message C2CChatMessage {
@@ -80,6 +93,7 @@ message ChatMessageWrapper {
 	// 以后要补充例如好友申请、服务器下发消息等等
 	oneof content {
 		C2CChatMessage c2cMessage = 1;
+		HeartBeatPack pingPack = 9;
 	}
 }
 

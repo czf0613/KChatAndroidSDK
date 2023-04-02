@@ -20,3 +20,9 @@ interface KChatEventDelegate {
 
     }
 }
+
+interface KChatSyncRecordStreamDelegate {
+    suspend fun processPack(pack: List<Chat.ChatMessageWrapper>) {
+
+    }
+}

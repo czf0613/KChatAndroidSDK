@@ -59,16 +59,16 @@ class MainActivity : AppCompatActivity() {
             val client = KChatServiceClient()
 
             client.listenForChatMessage(object : KChatEventDelegate {
-                override fun onReceiveC2CMessage(message: Chat.C2CChatMessage) {
+                override suspend fun onReceiveC2CMessage(message: Chat.C2CChatMessage) {
                     val body = message.content.toStringUtf8()
                     println("receiving: $body")
                 }
 
-                override fun channelClose(e: Throwable?) {
+                override suspend fun channelClose(e: Throwable?) {
                     println("channel被关闭")
                 }
 
-                override fun onError(e: Throwable) {
+                override suspend fun onError(e: Throwable) {
                     e.printStackTrace()
                 }
             })

@@ -17,25 +17,33 @@ class KChatServiceClient {
          * 在app启动时，可以用这个接口进行数据的同步
          * @param startTime 同步聊天记录的开始区间，ISO8601时间戳，带时区
          * @param endTime 参照startTime即可
-         * @return 返回的是一个list of object。内部的object是一个联合体，它可能是以下几种类型之一：C2CChatMessage, GroupChatMessage, FriendApply等等，需要通过ChatMessageWrapperContentCase这个枚举进行判断
+         * @param pageSize 分页查询的每一页大小，不要设置太大的值，手机可能处理不过来
+         * @param currentPage 以0为基数的页码，超出的话后端接口不会报错，而是返回空
+         * @return 返回的是一个元组，分别是list of object和totalPages。totalPages可以方便前端进行分页查询
+         * 内部的object是一个联合体，它可能是以下几种类型之一：C2CChatMessage, GroupChatMessage, FriendApply等等，需要通过ChatMessageWrapperContentCase这个枚举进行判断
          */
-        suspend fun fetChatRecords(
+        suspend fun fetchChatRecords(
             startTime: String = "2022-01-01T00:00:00.000+08:00",
-            endTime: String = "2099-12-31T23:59:59.999+08:00"
-        ): List<Chat.ChatMessageWrapper> {
+            endTime: String = "2099-12-31T23:59:59.999+08:00",
+            pageSize: Int = 10,
+            currentPage: Int = 0
+        ): Pair<List<Chat.ChatMessageWrapper>, Int> {
             val request = Chat.SyncChatRecordRequest.newBuilder()
                 .setUserUid(KChatSDKClient.userUid)
                 .setFromTime(startTime)
                 .setToTime(endTime)
+                .setMaxLength(pageSize)
+                .setPage(currentPage)
                 .build()
 
             return try {
-                KChatSDKClient.chatClient.syncChatRecord(request, KChatSDKClient.header).recordsList
+                val resp = KChatSDKClient.chatClient.syncChatRecord(request, KChatSDKClient.header)
+                Pair(resp.recordsList, resp.totalPages)
             } catch (e: Exception) {
                 Log.e("KChat.SyncRecord", "failed to fetch data")
                 e.printStackTrace()
 
-                emptyList()
+                Pair(emptyList(), 0)
             }
         }
 
@@ -72,8 +80,8 @@ class KChatServiceClient {
     }
 
     // 为防止GC导致listener被意外中断，这里需要建立一个局部变量进行处理
-    private lateinit var listener: KChatEventDelegate
     private lateinit var chatChannel: Flow<Chat.ChatMessageWrapper>
+    private lateinit var syncChannel: Flow<Chat.SyncChatRecordReply>
 
     /**
      * 这个方法需要传入一个delegate用于接收新消息的回调
@@ -81,32 +89,24 @@ class KChatServiceClient {
      * 请务必手动切换线程以避免非主线程刷新UI的bug
      */
     suspend fun listenForChatMessage(listener: KChatEventDelegate) {
-        this.listener = listener
-
         val request = Chat.SubscribeChannelRequest.newBuilder()
             .setUserUid(KChatSDKClient.userUid)
             .setDeviceTag(KChatSDKClient.deviceId)
             .build()
 
-        try {
-            this.chatChannel = KChatSDKClient.chatClient
-                .subscribeChatMessage(request, KChatSDKClient.header)
-        } catch (e: Exception) {
-            Log.e("KChat.Subscribe", "fail to establish a chat channel")
-            listener.channelClose(e)
-        }
+        this.chatChannel = KChatSDKClient.chatClient
+            .subscribeChatMessage(request, KChatSDKClient.header)
 
-        this.chatChannel
-            .flowOn(Dispatchers.IO)
+        this.chatChannel.flowOn(Dispatchers.IO)
             .onStart {
                 Log.i("KChat.Subscribe", "start listening for message.")
             }
             .catch { err ->
-                this@KChatServiceClient.listener.onError(err)
+                listener.onError(err)
                 Log.e("KChat.Subscribe", "network err!")
             }
             .onCompletion { err ->
-                this@KChatServiceClient.listener.channelClose(err)
+                listener.channelClose(err)
                 Log.e("KChat.Subscribe", "channel closed due to some reason.")
             }
             .collect { message ->
@@ -114,8 +114,48 @@ class KChatServiceClient {
                     Chat.ChatMessageWrapper.ContentCase.C2CMESSAGE -> listener.onReceiveC2CMessage(
                         message.c2CMessage
                     )
-                    else -> this@KChatServiceClient.listener.onError(IllegalArgumentException("unknown message type"))
+                    else -> listener.onError(IllegalArgumentException("unknown message type"))
                 }
+            }
+    }
+
+    /**
+     * @see fetchChatRecords 这个也是用来同步聊天记录的接口，可以查看上面接口的定义
+     * 不同的是，这个接口会以stream的形式返回数据，因此就可以慢慢处理所有的数据
+     * 同样的道理，不应该在这个地方设置过大的pageSize，小心手机被卡爆
+     *
+     * @see listenForChatMessage 关于delegate的处理，可以看上面的函数
+     */
+    suspend fun fetchChatRecords(
+        startTime: String = "2022-01-01T00:00:00.000+08:00",
+        endTime: String = "2099-12-31T23:59:59.999+08:00",
+        pageSize: Int = 10,
+        delegate: KChatSyncRecordStreamDelegate
+    ) {
+        val request = Chat.SyncChatRecordRequest.newBuilder()
+            .setUserUid(KChatSDKClient.userUid)
+            .setFromTime(startTime)
+            .setToTime(endTime)
+            .setMaxLength(pageSize)
+            .build()
+
+        this.syncChannel = KChatSDKClient.chatClient.syncChatRecordStream(request)
+
+        this.syncChannel.flowOn(Dispatchers.IO)
+            .onStart {
+                Log.i("KChat.Sync", "start synking message.")
+            }
+            .catch { err ->
+                err.printStackTrace()
+                Log.e("KChat.Sync", "network err!")
+            }
+            .onCompletion { err ->
+                err?.printStackTrace()
+                Log.e("KChat.Sync", "sync closed due to some reason.")
+            }
+            .collect { message ->
+                Log.i("KChat.Sync", "pack size: ${message.recordsList.size}")
+                delegate.processPack(message.recordsList)
             }
     }
 }
